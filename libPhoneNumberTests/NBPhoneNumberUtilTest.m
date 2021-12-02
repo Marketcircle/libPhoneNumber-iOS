@@ -2953,6 +2953,12 @@ static NSArray *PhoneNumberDescEntryForNationalNumberPattern(NSString *numberPat
   XCTAssertTrue([nzNumber isEqual:[_aUtil parse:@"03-3316005x3456"
                                       defaultRegion:@"NZ"
                                               error:&anError]]);
+  XCTAssertTrue([nzNumber isEqual:[_aUtil parse:@"03-3316005,3456"
+                                      defaultRegion:@"NZ"
+                                              error:&anError]]);
+  XCTAssertTrue([nzNumber isEqual:[_aUtil parse:@"03-3316005;3456"
+                                      defaultRegion:@"NZ"
+                                              error:&anError]]);
   XCTAssertTrue([nzNumber isEqual:[_aUtil parse:@"03-3316005 int.3456"
                                       defaultRegion:@"NZ"
                                               error:&anError]]);

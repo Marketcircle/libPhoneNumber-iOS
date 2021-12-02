@@ -442,7 +442,7 @@ static NSArray *GEO_MOBILE_COUNTRIES;
   dispatch_once(&onceToken, ^{
     NSString *EXTN_PATTERNS_FOR_PARSING =
         @"(?:;ext=([0-9０-９٠-٩۰-۹]{1,7})|[  "
-        @"\\t,]*(?:e?xt(?:ensi(?:ó?|ó))?n?|ｅ?ｘｔｎ?|[,xｘX#＃~～]|int|anexo|ｉｎｔ)[:\\.．]?["
+        @"\\t,]*(?:e?xt(?:ensi(?:ó?|ó))?n?|ｅ?ｘｔｎ?|[,;xｘX#＃~～]|int|anexo|ｉｎｔ)[:\\.．]?["
         @"  \\t,-]*([0-9０-９٠-٩۰-۹]{1,7})#?|[- ]+([0-9０-９٠-٩۰-۹]{1,5})#)$";
 
     LEADING_PLUS_CHARS_PATTERN = [NSString stringWithFormat:@"^[%@]+", NB_PLUS_CHARS];
@@ -466,7 +466,7 @@ static NSArray *GEO_MOBILE_COUNTRIES;
         @" "
         @"­​⁠　()（）［］.\\[\\]/"
         @"~⁓∼～*A-Za-z0-9０-９٠-٩۰-۹]*(?:;ext=([0-9０-９٠-٩۰-۹]{1,7})|[  "
-        @"\\t,]*(?:e?xt(?:ensi(?:ó?|ó))?n?|ｅ?ｘｔｎ?|[,xｘ#＃~～]|int|anexo|ｉｎｔ)[:\\.．]?[ "
+        @"\\t,]*(?:e?xt(?:ensi(?:ó?|ó))?n?|ｅ?ｘｔｎ?|[,;xｘX#＃~～]|int|anexo|ｉｎｔ)[:\\.．]?[ "
         @" \\t,-]*([0-9０-９٠-٩۰-۹]{1,7})#?|[- ]+([0-9０-９٠-٩۰-۹]{1,5})#)?$";
   });
 }
