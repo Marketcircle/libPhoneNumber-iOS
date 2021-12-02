@@ -78,7 +78,7 @@ static NSString *RFC3966_EXTN_PREFIX = @";ext=";
 static NSString *RFC3966_PREFIX = @"tel:";
 static NSString *RFC3966_PHONE_CONTEXT = @";phone-context=";
 static NSString *RFC3966_ISDN_SUBADDRESS = @";isub=";
-static NSString *DEFAULT_EXTN_PREFIX = @" ext. ";
+static NSString *DEFAULT_EXTN_PREFIX = @" x";
 static NSString *VALID_ALPHA = @"A-Za-z";
 
 #pragma mark - Static regular expression strings -

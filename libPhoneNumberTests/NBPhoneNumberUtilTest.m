@@ -858,13 +858,13 @@ static NSArray *PhoneNumberDescEntryForNationalNumberPattern(NSString *numberPat
 
   id arNumberWithExtn = self.arMobile;
   [arNumberWithExtn setExtension:@"1234"];
-  XCTAssertEqualObjects(@"011 54 9 11 8765 4321 ext. 1234",
+  XCTAssertEqualObjects(@"011 54 9 11 8765 4321 x1234",
                         [_aUtil formatOutOfCountryCallingNumber:arNumberWithExtn
                                               regionCallingFrom:@"US"]);
-  XCTAssertEqualObjects(@"0011 54 9 11 8765 4321 ext. 1234",
+  XCTAssertEqualObjects(@"0011 54 9 11 8765 4321 x1234",
                         [_aUtil formatOutOfCountryCallingNumber:arNumberWithExtn
                                               regionCallingFrom:@"AU"]);
-  XCTAssertEqualObjects(@"011 15 8765-4321 ext. 1234",
+  XCTAssertEqualObjects(@"011 15 8765-4321 x1234",
                         [_aUtil formatOutOfCountryCallingNumber:arNumberWithExtn
                                               regionCallingFrom:@"AR"]);
 }
@@ -1246,7 +1246,7 @@ static NSArray *PhoneNumberDescEntryForNationalNumberPattern(NSString *numberPat
 
   [nzNumber setExtension:@"1234"];
   // Uses default extension prefix:
-  XCTAssertEqualObjects(@"03-331 6005 ext. 1234", [_aUtil format:nzNumber
+  XCTAssertEqualObjects(@"03-331 6005 x1234", [_aUtil format:nzNumber
                                                       numberFormat:NBEPhoneNumberFormatNATIONAL]);
   // Uses RFC 3966 syntax.
   XCTAssertEqualObjects(@"tel:+64-3-331-6005;ext=1234",
