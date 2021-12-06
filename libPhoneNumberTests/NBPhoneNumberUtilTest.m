@@ -1265,17 +1265,28 @@ static NSArray *PhoneNumberDescEntryForNationalNumberPattern(NSString *numberPat
   NBPhoneNumber *number1 = [_aUtil parseAndKeepRawInput:@"033316005 ext. 3456" defaultRegion:@"NZ" error:&anError];
   XCTAssertEqualObjects(@"03-331 6005 ext. 3456", [_aUtil format:number1 numberFormat:NBEPhoneNumberFormatNATIONAL preserveExtensionDelimiter:YES error:&anError]);
 
-  NBPhoneNumber *number2 = [_aUtil parseAndKeepRawInput:@"03-3316005x3456" defaultRegion:@"NZ" error:&anError];
-  XCTAssertEqualObjects(@"03-331 6005x3456", [_aUtil format:number2 numberFormat:NBEPhoneNumberFormatNATIONAL preserveExtensionDelimiter:YES error:&anError]);
+  NBPhoneNumber *number2 = [_aUtil parseAndKeepRawInput:@"03-3316005 x3456" defaultRegion:@"NZ" error:&anError];
+  XCTAssertEqualObjects(@"03-331 6005 x3456", [_aUtil format:number2 numberFormat:NBEPhoneNumberFormatNATIONAL preserveExtensionDelimiter:YES error:&anError]);
 
-  NBPhoneNumber *number2b = [_aUtil parseAndKeepRawInput:@"03-3316005 x3456" defaultRegion:@"NZ" error:&anError];
+  // Always add a space before delimiter of "x"
+  NBPhoneNumber *number2b = [_aUtil parseAndKeepRawInput:@"03-3316005x3456" defaultRegion:@"NZ" error:&anError];
   XCTAssertEqualObjects(@"03-331 6005 x3456", [_aUtil format:number2b numberFormat:NBEPhoneNumberFormatNATIONAL preserveExtensionDelimiter:YES error:&anError]);
 
+  // Convert whitespace such as tab to space
   NBPhoneNumber *number2c = [_aUtil parseAndKeepRawInput:@"03-3316005\tx3456" defaultRegion:@"NZ" error:&anError];
   XCTAssertEqualObjects(@"03-331 6005 x3456", [_aUtil format:number2c numberFormat:NBEPhoneNumberFormatNATIONAL preserveExtensionDelimiter:YES error:&anError]);
 
+  // Collapse whitespace to single space
   NBPhoneNumber *number2d = [_aUtil parseAndKeepRawInput:@"03-3316005   x3456" defaultRegion:@"NZ" error:&anError];
   XCTAssertEqualObjects(@"03-331 6005 x3456", [_aUtil format:number2d numberFormat:NBEPhoneNumberFormatNATIONAL preserveExtensionDelimiter:YES error:&anError]);
+
+  // Lowercase delimiter of "X" to "x"
+  NBPhoneNumber *number2e = [_aUtil parseAndKeepRawInput:@"03-3316005 X3456" defaultRegion:@"NZ" error:&anError];
+  XCTAssertEqualObjects(@"03-331 6005 x3456", [_aUtil format:number2e numberFormat:NBEPhoneNumberFormatNATIONAL preserveExtensionDelimiter:YES error:&anError]);
+
+  // Always add a space before delimiter of "x"
+  NBPhoneNumber *number2f = [_aUtil parseAndKeepRawInput:@"03-3316005,x3456" defaultRegion:@"NZ" error:&anError];
+  XCTAssertEqualObjects(@"03-331 6005, x3456", [_aUtil format:number2f numberFormat:NBEPhoneNumberFormatNATIONAL preserveExtensionDelimiter:YES error:&anError]);
 
   NBPhoneNumber *number3 = [_aUtil parseAndKeepRawInput:@"033316005,3456" defaultRegion:@"NZ" error:&anError];
   XCTAssertEqualObjects(@"03-331 6005,3456", [_aUtil format:number3 numberFormat:NBEPhoneNumberFormatNATIONAL preserveExtensionDelimiter:YES error:&anError]);

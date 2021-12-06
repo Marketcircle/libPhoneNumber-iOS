@@ -3425,6 +3425,16 @@ preserveExtensionDelimiter:(BOOL)preserveExtensionDelimiter {
             extDelimSuf = [extDelimSuf stringByCollapsingWhitespace];
           }
 
+          // Change extension delimiter of "X" to lowercase
+          if ([extDelimString isEqualToString:@"X"]) {
+            extDelimString = @"x";
+          }
+
+          // If using "x" as extension delimiter, ensure prefix includes a space
+          if ([@"xｘ" containsString:extDelimString] && ![extDelimPre containsString:@" "]) {
+            extDelimPre = [extDelimPre stringByAppendingString:@" "];
+          }
+
           *delimiter = [NSString stringWithFormat:@"%@%@%@", extDelimPre, extDelimString, extDelimSuf];
         }
       }
