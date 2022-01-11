@@ -109,6 +109,10 @@
 - (NSString *)format:(NBPhoneNumber *)phoneNumber
         numberFormat:(NBEPhoneNumberFormat)numberFormat
                error:(NSError **)error;
+- (NSString *)format:(NBPhoneNumber *)phoneNumber
+        numberFormat:(NBEPhoneNumberFormat)numberFormat
+preserveExtensionDelimiter:(BOOL)preserveExtensionDelimiter
+               error:(NSError **)error;
 - (NSString *)formatByPattern:(NBPhoneNumber *)number
                  numberFormat:(NBEPhoneNumberFormat)numberFormat
            userDefinedFormats:(NSArray *)userDefinedFormats

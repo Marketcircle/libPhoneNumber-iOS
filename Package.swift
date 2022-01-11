@@ -4,6 +4,12 @@ import PackageDescription
 
 let package = Package(
     name: "libPhoneNumber",
+    platforms: [
+        .macOS(.v10_13),
+        .iOS(.v11),
+        .tvOS(.v11),
+        .watchOS(.v4)
+    ],
     products: [
         .library(
             name: "libPhoneNumber",

@@ -62,6 +62,7 @@
   phoneNumberCopy.countryCode = [self.countryCode copy];
   phoneNumberCopy.nationalNumber = [self.nationalNumber copy];
   phoneNumberCopy.extension = [self.extension copy];
+  phoneNumberCopy.extensionDelimiter = [self.extensionDelimiter copy];
   phoneNumberCopy.italianLeadingZero = self.italianLeadingZero;
   phoneNumberCopy.numberOfLeadingZeros = [self.numberOfLeadingZeros copy];
   phoneNumberCopy.rawInput = [self.rawInput copy];

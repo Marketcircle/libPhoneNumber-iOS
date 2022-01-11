@@ -1259,6 +1259,50 @@ static NSArray *PhoneNumberDescEntryForNationalNumberPattern(NSString *numberPat
                                                         numberFormat:NBEPhoneNumberFormatNATIONAL]);
 }
 
+- (void)testFormatPreserveExtensionDelimiter {
+  NSError *anError = nil;
+
+  NBPhoneNumber *number1 = [_aUtil parseAndKeepRawInput:@"033316005 ext. 3456" defaultRegion:@"NZ" error:&anError];
+  XCTAssertEqualObjects(@"03-331 6005 ext. 3456", [_aUtil format:number1 numberFormat:NBEPhoneNumberFormatNATIONAL preserveExtensionDelimiter:YES error:&anError]);
+
+  NBPhoneNumber *number2 = [_aUtil parseAndKeepRawInput:@"03-3316005x3456" defaultRegion:@"NZ" error:&anError];
+  XCTAssertEqualObjects(@"03-331 6005x3456", [_aUtil format:number2 numberFormat:NBEPhoneNumberFormatNATIONAL preserveExtensionDelimiter:YES error:&anError]);
+
+  NBPhoneNumber *number2b = [_aUtil parseAndKeepRawInput:@"03-3316005 x3456" defaultRegion:@"NZ" error:&anError];
+  XCTAssertEqualObjects(@"03-331 6005 x3456", [_aUtil format:number2b numberFormat:NBEPhoneNumberFormatNATIONAL preserveExtensionDelimiter:YES error:&anError]);
+
+  NBPhoneNumber *number2c = [_aUtil parseAndKeepRawInput:@"03-3316005\tx3456" defaultRegion:@"NZ" error:&anError];
+  XCTAssertEqualObjects(@"03-331 6005 x3456", [_aUtil format:number2c numberFormat:NBEPhoneNumberFormatNATIONAL preserveExtensionDelimiter:YES error:&anError]);
+
+  NBPhoneNumber *number2d = [_aUtil parseAndKeepRawInput:@"03-3316005   x3456" defaultRegion:@"NZ" error:&anError];
+  XCTAssertEqualObjects(@"03-331 6005 x3456", [_aUtil format:number2d numberFormat:NBEPhoneNumberFormatNATIONAL preserveExtensionDelimiter:YES error:&anError]);
+
+  NBPhoneNumber *number3 = [_aUtil parseAndKeepRawInput:@"033316005,3456" defaultRegion:@"NZ" error:&anError];
+  XCTAssertEqualObjects(@"03-331 6005,3456", [_aUtil format:number3 numberFormat:NBEPhoneNumberFormatNATIONAL preserveExtensionDelimiter:YES error:&anError]);
+
+  NBPhoneNumber *number3b = [_aUtil parseAndKeepRawInput:@"033316005, 3456" defaultRegion:@"NZ" error:&anError];
+  XCTAssertEqualObjects(@"03-331 6005, 3456", [_aUtil format:number3b numberFormat:NBEPhoneNumberFormatNATIONAL preserveExtensionDelimiter:YES error:&anError]);
+
+  NBPhoneNumber *number3c = [_aUtil parseAndKeepRawInput:@"033316005,\t 3456" defaultRegion:@"NZ" error:&anError];
+  XCTAssertEqualObjects(@"03-331 6005, 3456", [_aUtil format:number3c numberFormat:NBEPhoneNumberFormatNATIONAL preserveExtensionDelimiter:YES error:&anError]);
+
+  NBPhoneNumber *number4 = [_aUtil parseAndKeepRawInput:@"03-3316005;3456" defaultRegion:@"NZ" error:&anError];
+  XCTAssertEqualObjects(@"03-331 6005;3456", [_aUtil format:number4 numberFormat:NBEPhoneNumberFormatNATIONAL preserveExtensionDelimiter:YES error:&anError]);
+
+  NBPhoneNumber *number4b = [_aUtil parseAndKeepRawInput:@"03-3316005; 3456" defaultRegion:@"NZ" error:&anError];
+  XCTAssertEqualObjects(@"03-331 6005; 3456", [_aUtil format:number4b numberFormat:NBEPhoneNumberFormatNATIONAL preserveExtensionDelimiter:YES error:&anError]);
+
+  NBPhoneNumber *number5 = [_aUtil parseAndKeepRawInput:@"03-3316005 int.3456" defaultRegion:@"NZ" error:&anError];
+  XCTAssertEqualObjects(@"03-331 6005 int.3456", [_aUtil format:number5 numberFormat:NBEPhoneNumberFormatNATIONAL preserveExtensionDelimiter:YES error:&anError]);
+
+  NBPhoneNumber *number6 = [_aUtil parseAndKeepRawInput:@"03 3316005 #3456" defaultRegion:@"NZ" error:&anError];
+  XCTAssertEqualObjects(@"03-331 6005 #3456", [_aUtil format:number6 numberFormat:NBEPhoneNumberFormatNATIONAL preserveExtensionDelimiter:YES error:&anError]);
+
+  // Convert RFC format to default extension delimiter
+  NBPhoneNumber *number7 = [_aUtil parseAndKeepRawInput:@"033316005;ext=3456" defaultRegion:@"NZ" error:&anError];
+  XCTAssertEqualObjects(@"03-331 6005 x3456", [_aUtil format:number7 numberFormat:NBEPhoneNumberFormatNATIONAL preserveExtensionDelimiter:YES error:&anError]);
+}
+
 - (void)testFormatInOriginalFormat {
   NSError *anError = nil;
   NBPhoneNumber *number1 = [_aUtil parseAndKeepRawInput:@"+442087654321"

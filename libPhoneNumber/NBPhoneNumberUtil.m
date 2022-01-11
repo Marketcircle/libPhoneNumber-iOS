@@ -15,6 +15,7 @@
 #import "NBPhoneNumberDefines.h"
 #import "NBPhoneNumberDesc.h"
 #import "NBRegExMatcher.h"
+#import "NSString+NBAdditions.h"
 
 #if TARGET_OS_IOS
 #import <CoreTelephony/CTCarrier.h>
@@ -441,9 +442,9 @@ static NSArray *GEO_MOBILE_COUNTRIES;
   static dispatch_once_t onceToken;
   dispatch_once(&onceToken, ^{
     NSString *EXTN_PATTERNS_FOR_PARSING =
-        @"(?:;ext=([0-9０-９٠-٩۰-۹]{1,7})|[  "
-        @"\\t,]*(?:e?xt(?:ensi(?:ó?|ó))?n?|ｅ?ｘｔｎ?|[,;xｘX#＃~～]|int|anexo|ｉｎｔ)[:\\.．]?["
-        @"  \\t,-]*([0-9０-９٠-٩۰-۹]{1,7})#?|[- ]+([0-9０-９٠-٩۰-۹]{1,5})#)$";
+        @"(?:;ext=([0-9０-９٠-٩۰-۹]{1,7})|(?<extDelimPre>[  "
+        @"\\t,]*)(?<extDelim>e?xt(?:ensi(?:ó?|ó))?n?|ｅ?ｘｔｎ?|[,;xｘX#＃~～]|int|anexo|ｉｎｔ)(?<extDelimSuf>[:\\.．]?["
+        @"  \\t,-]*)([0-9０-９٠-٩۰-۹]{1,7})#?|[- ]+([0-9０-９٠-٩۰-۹]{1,5})#)$";
 
     LEADING_PLUS_CHARS_PATTERN = [NSString stringWithFormat:@"^[%@]+", NB_PLUS_CHARS];
 
@@ -1043,9 +1044,16 @@ static NSArray *GEO_MOBILE_COUNTRIES;
 - (NSString *)format:(NBPhoneNumber *)phoneNumber
         numberFormat:(NBEPhoneNumberFormat)numberFormat
                error:(NSError **)error {
+  return [self format:phoneNumber numberFormat:numberFormat preserveExtensionDelimiter:NO error: error];
+}
+
+- (NSString *)format:(NBPhoneNumber *)phoneNumber
+        numberFormat:(NBEPhoneNumberFormat)numberFormat
+preserveExtensionDelimiter:(BOOL)preserveExtensionDelimiter
+               error:(NSError **)error {
   NSString *res = nil;
   @try {
-    res = [self format:phoneNumber numberFormat:numberFormat];
+    res = [self format:phoneNumber numberFormat:numberFormat preserveExtensionDelimiter:preserveExtensionDelimiter];
   } @catch (NSException *exception) {
     NSDictionary *userInfo = [NSDictionary dictionaryWithObject:exception.reason
                                                          forKey:NSLocalizedDescriptionKey];
@@ -1054,7 +1062,14 @@ static NSArray *GEO_MOBILE_COUNTRIES;
   return res;
 }
 
-- (NSString *)format:(NBPhoneNumber *)phoneNumber numberFormat:(NBEPhoneNumberFormat)numberFormat {
+- (NSString *)format:(NBPhoneNumber *)phoneNumber
+        numberFormat:(NBEPhoneNumberFormat)numberFormat {
+  return [self format:phoneNumber numberFormat:numberFormat preserveExtensionDelimiter:NO];
+}
+
+- (NSString *)format:(NBPhoneNumber *)phoneNumber
+        numberFormat:(NBEPhoneNumberFormat)numberFormat
+preserveExtensionDelimiter:(BOOL)preserveExtensionDelimiter {
   if ([phoneNumber.nationalNumber isEqualToNumber:@0] &&
       [NBMetadataHelper hasValue:phoneNumber.rawInput]) {
     // Unparseable numbers that kept their raw input just use that.
@@ -1100,7 +1115,8 @@ static NSArray *GEO_MOBILE_COUNTRIES;
                                                            regionCode:regionCode];
   NSString *formattedExtension = [self maybeGetFormattedExtension:phoneNumber
                                                          metadata:metadata
-                                                     numberFormat:numberFormat];
+                                                     numberFormat:numberFormat
+                                  preserveExtensionDelimiter:preserveExtensionDelimiter];
   NSString *formattedNationalNumber = [self formatNsn:nationalSignificantNumber
                                              metadata:metadata
                                     phoneNumberFormat:numberFormat
@@ -2185,13 +2201,25 @@ static NSArray *GEO_MOBILE_COUNTRIES;
 - (NSString *)maybeGetFormattedExtension:(NBPhoneNumber *)number
                                 metadata:(NBPhoneMetaData *)metadata
                             numberFormat:(NBEPhoneNumberFormat)numberFormat {
+  return [self maybeGetFormattedExtension:number
+                                 metadata:metadata
+                             numberFormat:numberFormat
+               preserveExtensionDelimiter:NO];
+}
+
+- (NSString *)maybeGetFormattedExtension:(NBPhoneNumber *)number
+                                metadata:(NBPhoneMetaData *)metadata
+                            numberFormat:(NBEPhoneNumberFormat)numberFormat
+              preserveExtensionDelimiter:(BOOL)preserveExtensionDelimiter {
   if ([NBMetadataHelper hasValue:number.extension] == NO) {
     return @"";
   } else {
     if (numberFormat == NBEPhoneNumberFormatRFC3966) {
       return [NSString stringWithFormat:@"%@%@", RFC3966_EXTN_PREFIX, number.extension];
     } else {
-      if ([NBMetadataHelper hasValue:metadata.preferredExtnPrefix]) {
+      if (preserveExtensionDelimiter && number.extensionDelimiter.length > 0) {
+        return [NSString stringWithFormat:@"%@%@", number.extensionDelimiter, number.extension];
+      } else if ([NBMetadataHelper hasValue:metadata.preferredExtnPrefix]) {
         return [NSString stringWithFormat:@"%@%@", metadata.preferredExtnPrefix, number.extension];
       } else {
         return [NSString stringWithFormat:@"%@%@", DEFAULT_EXTN_PREFIX, number.extension];
@@ -2638,7 +2666,7 @@ static NSArray *GEO_MOBILE_COUNTRIES;
 
   /** @type {!goog.string.StringBuffer} */
   NSString *strippedNumber = [number copy];
-  [self maybeStripExtension:&strippedNumber];
+  [self maybeStripExtension:&strippedNumber extensionDelimiter:nil];
 
   return [self matchesEntirely:VALID_ALPHA_PHONE_PATTERN_STRING string:strippedNumber];
 }
@@ -3358,7 +3386,7 @@ static NSArray *GEO_MOBILE_COUNTRIES;
  *     that we wish to strip the extension from.
  * @return {string} the phone extension.
  */
-- (NSString *)maybeStripExtension:(NSString **)number {
+- (NSString *)maybeStripExtension:(NSString **)number extensionDelimiter:(NSString **)delimiter {
   if (number == NULL) {
     return @"";
   }
@@ -3370,14 +3398,47 @@ static NSArray *GEO_MOBILE_COUNTRIES;
   // number, we assume it is an extension.
   if (mStart >= 0 &&
       [self isViablePhoneNumber:[numberStr substringWithRange:NSMakeRange(0, mStart)]]) {
+
     // The numbers are captured into groups in the regular expression.
     NSTextCheckingResult *firstMatch = [self matchFirstByRegex:numberStr regex:EXTN_PATTERN];
-    NSUInteger matchedGroupsLength = [firstMatch numberOfRanges];
 
+    // Use named capture groups to find the extension delimiter (with its prefix and suffix)
+    NSRange extDelimPreRange = [firstMatch rangeWithName:@"extDelimPre"];
+    NSRange extDelimRange = [firstMatch rangeWithName:@"extDelim"];
+    NSRange extDelimSufRange = [firstMatch rangeWithName:@"extDelimSuf"];
+
+    if (delimiter != NULL) {
+      // Check if an extension delimiter was found
+      if (extDelimRange.location != NSNotFound && extDelimRange.location < numberStr.length) {
+        NSString *extDelimString = [(*number) substringWithRange:extDelimRange];
+        if (extDelimRange.length > 0) {
+          NSString *extDelimPre = @"";
+          NSString *extDelimSuf = @"";
+          // Found an extension delimiter, so check the prefix and suffix as well,
+          // collapsing any consecutive whitespace
+          if (extDelimPreRange.location != NSNotFound && extDelimPreRange.location < numberStr.length) {
+            extDelimPre = [(*number) substringWithRange:extDelimPreRange];
+            extDelimPre = [extDelimPre stringByCollapsingWhitespace];
+          }
+          if (extDelimSufRange.location != NSNotFound && extDelimSufRange.location < numberStr.length) {
+            extDelimSuf = [(*number) substringWithRange:extDelimSufRange];
+            extDelimSuf = [extDelimSuf stringByCollapsingWhitespace];
+          }
+
+          *delimiter = [NSString stringWithFormat:@"%@%@%@", extDelimPre, extDelimString, extDelimSuf];
+        }
+      }
+    }
+
+    NSUInteger matchedGroupsLength = [firstMatch numberOfRanges];
     for (NSUInteger i = 1; i < matchedGroupsLength; i++) {
       NSRange curRange = [firstMatch rangeAtIndex:i];
 
-      if (curRange.location != NSNotFound && curRange.location < numberStr.length) {
+      // Look for a valid capture group (skipping the named groups for the extension delimiter)
+      if (curRange.location != NSNotFound && curRange.location < numberStr.length
+          && !NSEqualRanges(curRange, extDelimPreRange)
+          && !NSEqualRanges(curRange, extDelimRange)
+          && !NSEqualRanges(curRange, extDelimSufRange)) {
         NSString *matchString = [(*number) substringWithRange:curRange];
         // We go through the capturing groups until we find one that captured
         // some digits. If none did, then we will return the empty string.
@@ -3650,8 +3711,10 @@ static CTTelephonyNetworkInfo *_telephonyNetworkInfo;
 
   // Attempt to parse extension first, since it doesn't require region-specific
   // data and we want to have the non-normalised number here.
-  NSString *extension = [self maybeStripExtension:&nationalNumber];
+  NSString *extensionDelimiter = @"";
+  NSString *extension = [self maybeStripExtension:&nationalNumber extensionDelimiter:&extensionDelimiter];
   if (extension.length > 0) {
+    phoneNumber.extensionDelimiter = [extensionDelimiter copy];
     phoneNumber.extension = [extension copy];
   }
   NBPhoneMetaData *regionMetadata = [self.helper getMetadataForRegion:defaultRegion];
