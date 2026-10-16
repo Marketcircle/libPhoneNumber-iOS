@@ -20,18 +20,18 @@
   NSScanner    *scanner = [NSScanner scannerWithString:self];
   NSMutableString  *newString = [NSMutableString stringWithCapacity:[self length]];
   NSString    *betweenString;
-  
+
   [scanner setCharactersToBeSkipped:nil];
-  
+
   while (![scanner isAtEnd])
   {
     if ([scanner scanUpToCharactersFromSet:aSet intoString:&betweenString])
       [newString appendString:betweenString];
-    
+
     if ([scanner scanCharactersFromSet:aSet intoString:NULL])
       [newString appendString:replaceString];
   }
-  
+
   return newString;
 }
 

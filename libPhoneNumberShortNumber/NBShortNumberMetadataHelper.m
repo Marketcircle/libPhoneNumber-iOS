@@ -7,7 +7,7 @@
 //
 
 #import "NBShortNumberMetadataHelper.h"
-#import "NBGeneratedShortNumberMetadata.h"
+#import "NBGeneratedShortNumberMetaData.h"
 #import "NBMetadataHelper.h"
 #import "NBPhoneMetaData.h"
 
@@ -63,7 +63,7 @@ static NSString *StringByTrimming(NSString *aString) {
   return self;
 }
 
-- (NBPhoneMetaData *)shortNumberMetadataForRegion:(NSString *)regionCode {
+- (NBPhoneMetaData * _Nullable)shortNumberMetadataForRegion:(NSString * _Nonnull)regionCode {
   regionCode = StringByTrimming(regionCode);
   if (regionCode.length == 0) {
     return nil;
@@ -84,6 +84,18 @@ static NSString *StringByTrimming(NSString *aString) {
   }
 
   return nil;
+}
+
+- (NSArray<NSString *> * _Nonnull)getSupportedRegions {
+  NSArray<NSString *> *allKeys = [_shortNumberDataMap[@"countryToMetadata"] allKeys];
+  NSPredicate *predicateIsNaN =
+      [NSPredicate predicateWithBlock:^BOOL(NSString *evaluatedObject, NSDictionary *bindings) {
+        NSCharacterSet *nonDecimalCharacterSet =
+            [[NSCharacterSet decimalDigitCharacterSet] invertedSet];
+        return [evaluatedObject rangeOfCharacterFromSet:nonDecimalCharacterSet].location != NSNotFound;
+      }];
+  NSArray<NSString *> *supportedRegions = [allKeys filteredArrayUsingPredicate:predicateIsNaN];
+  return [supportedRegions sortedArrayUsingSelector:@selector(compare:)];
 }
 
 /**

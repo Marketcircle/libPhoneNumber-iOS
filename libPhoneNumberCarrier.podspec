@@ -1,0 +1,36 @@
+Pod::Spec.new do |s|
+  s.name         = "libPhoneNumberCarrier"
+  s.version      = "2.1.2"
+  s.summary      = "Carrier metadata features for libPhoneNumber-iOS"
+  s.description  = "Carrier metadata lookup for libPhoneNumber-iOS. This optional module stores carrier prefix metadata on disk."
+  s.homepage     = "https://github.com/iziz/libPhoneNumber-iOS.git"
+  s.license      = 'Apache License, Version 2.0 (http://www.apache.org/licenses/LICENSE-2.0)'
+  s.authors      = {
+                    "iziz" => "zen.isis@gmail.com",
+                    "hyukhur" => "hyukhur@gmail.com",
+                    "Kris Kline" => "kris.kline@oracle.com"
+                   }
+
+  s.source       = {
+                    :git => "https://github.com/iziz/libPhoneNumber-iOS.git",
+                    :tag => s.version.to_s
+                   }
+
+  s.libraries    = 'sqlite3'
+
+  s.ios.deployment_target = "15.0"
+  s.osx.deployment_target = "12.0"
+  s.watchos.deployment_target = "9.0"
+  s.tvos.deployment_target = "15.0"
+  s.visionos.deployment_target = "1.0"
+
+  s.requires_arc = true
+
+  s.resources    = "libPhoneNumberCarrierMetaData/*.bundle"
+
+  s.dependency 'libPhoneNumber-iOS', '~> 2.1.2'
+
+  s.source_files = [
+                    'libPhoneNumberCarrier/**/*.{h,m}',
+                   ]
+end

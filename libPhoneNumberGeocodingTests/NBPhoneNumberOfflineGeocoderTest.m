@@ -8,10 +8,11 @@
 
 #import <XCTest/XCTest.h>
 
-#import "NBMetadataHelper.h"
+#import "NBGeocoderMetaDataHelper.h"
 #import "NBPhoneNumber.h"
 #import "NBPhoneNumberOfflineGeocoder.h"
 #import "NBPhoneNumberUtil.h"
+#import "NSBundle+Extensions.h"
 
 @interface NBPhoneNumberOfflineGeocoderTest : XCTestCase
 
@@ -42,16 +43,15 @@
 - (void)setUp {
   [super setUp];
   // For testing purposes, this set-up will pass in a testing database.
-  NSBundle *bundle = [NSBundle bundleForClass:self.classForCoder];
-  NSURL *resourceURL = [[bundle resourceURL] URLByAppendingPathComponent:@"TestingSource.bundle"];
-  NSBundle *testDatabaseBundle = [NSBundle bundleWithURL:resourceURL];
+  NSString* path = [NSBundle pathForFirstResourceNamed:@"TestingSource" ofType:@"bundle"];
+  NSBundle *testDatabaseBundle = [NSBundle bundleWithPath:path];
 
   NBPhoneNumberUtil *phoneNumberUtil = [NBPhoneNumberUtil sharedInstance];
 
   self.geocoder = [[NBPhoneNumberOfflineGeocoder alloc]
-      initWithMetadataHelperFactory:^NBGeocoderMetadataHelper *(NSNumber *_Nonnull countryCode,
+      initWithMetaDataHelperFactory:^NBGeocoderMetaDataHelper *(NSNumber *_Nonnull countryCode,
                                                                 NSString *_Nonnull language) {
-        return [[NBGeocoderMetadataHelper alloc] initWithCountryCode:countryCode
+        return [[NBGeocoderMetaDataHelper alloc] initWithCountryCode:countryCode
                                                         withLanguage:language
                                                           withBundle:testDatabaseBundle];
       }
@@ -307,13 +307,15 @@
 
 #pragma mark - Convenience method tests
 
-// This set of tests utilizes the convenience methods, assuming that the current device's language
-// is set to English
+// This set of tests verifies that convenience methods use the current device's preferred language.
 
 - (void)testConvenienceGetDescriptionForNumberWithNoDataFile {
-  XCTAssertEqualObjects(@"Abaco Island",
+  NSString *languageCode = [[NSLocale preferredLanguages] firstObject];
+  XCTAssertEqualObjects([self.geocoder descriptionForNumber:self.bahamasPhoneNumber
+                                          withLanguageCode:languageCode],
                         [self.geocoder descriptionForNumber:self.bahamasPhoneNumber]);
-  XCTAssertEqualObjects(@"Australia",
+  XCTAssertEqualObjects([self.geocoder descriptionForNumber:self.australianPhoneNumber
+                                          withLanguageCode:languageCode],
                         [self.geocoder descriptionForNumber:self.australianPhoneNumber]);
   XCTAssertNil([self.geocoder descriptionForNumber:self.invalidCountryCodePhoneNumber]);
   XCTAssertNil([self.geocoder descriptionForNumber:self.internationalTollFreePhoneNumber]);
@@ -322,7 +324,9 @@
 - (void)testConvenienceGetDescriptionForNumberWithNoDatabaseEntry {
   // Test that the name of the country is returned when the number passed in is valid but not
   // covered by the geocoding data file.
-  XCTAssertEqualObjects(@"Australia",
+  NSString *languageCode = [[NSLocale preferredLanguages] firstObject];
+  XCTAssertEqualObjects([self.geocoder descriptionForNumber:self.australianPhoneNumber
+                                          withLanguageCode:languageCode],
                         [self.geocoder descriptionForNumber:self.australianPhoneNumber]);
 }
 
@@ -333,27 +337,41 @@
 }
 
 - (void)testConvenienceGetDescriptionForNumber_en_US {
-  XCTAssertEqualObjects(@"Mountain View, CA",
+  NSString *languageCode = [[NSLocale preferredLanguages] firstObject];
+  XCTAssertEqualObjects([self.geocoder descriptionForNumber:self.unitedStatesPhoneNumber2
+                                          withLanguageCode:languageCode],
                         [self.geocoder descriptionForNumber:self.unitedStatesPhoneNumber2]);
-  XCTAssertEqualObjects(@"New York, NY",
+  XCTAssertEqualObjects([self.geocoder descriptionForNumber:self.unitedStatesPhoneNumber3
+                                          withLanguageCode:languageCode],
                         [self.geocoder descriptionForNumber:self.unitedStatesPhoneNumber3]);
 }
 
 - (void)testConvenienceGetDescriptionForKoreanNumber {
-  XCTAssertEqualObjects(@"Seoul", [self.geocoder descriptionForNumber:self.koreanPhoneNumber1]);
-  XCTAssertEqualObjects(@"Incheon", [self.geocoder descriptionForNumber:self.koreanPhoneNumber2]);
-  XCTAssertEqualObjects(@"Jeju", [self.geocoder descriptionForNumber:self.koreanPhoneNumber3]);
+  NSString *languageCode = [[NSLocale preferredLanguages] firstObject];
+  XCTAssertEqualObjects([self.geocoder descriptionForNumber:self.koreanPhoneNumber1
+                                          withLanguageCode:languageCode],
+                        [self.geocoder descriptionForNumber:self.koreanPhoneNumber1]);
+  XCTAssertEqualObjects([self.geocoder descriptionForNumber:self.koreanPhoneNumber2
+                                          withLanguageCode:languageCode],
+                        [self.geocoder descriptionForNumber:self.koreanPhoneNumber2]);
+  XCTAssertEqualObjects([self.geocoder descriptionForNumber:self.koreanPhoneNumber3
+                                          withLanguageCode:languageCode],
+                        [self.geocoder descriptionForNumber:self.koreanPhoneNumber3]);
 }
 
 - (void)testConvenienceGetDescriptionForArgentinianMobileNumber {
-  XCTAssertEqualObjects(@"La Plata, Buenos Aires",
+  NSString *languageCode = [[NSLocale preferredLanguages] firstObject];
+  XCTAssertEqualObjects([self.geocoder descriptionForNumber:self.saudiArabianPhoneNumber
+                                          withLanguageCode:languageCode],
                         [self.geocoder descriptionForNumber:self.saudiArabianPhoneNumber]);
 }
 
 - (void)testConvenienceGetDescriptionForFallBack {
   // No fallback, as the location name for the given phone number is available in the requested
   // language.
-  XCTAssertEqualObjects(@"New York, NY",
+  NSString *languageCode = [[NSLocale preferredLanguages] firstObject];
+  XCTAssertEqualObjects([self.geocoder descriptionForNumber:self.unitedStatesPhoneNumber3
+                                          withLanguageCode:languageCode],
                         [self.geocoder descriptionForNumber:self.unitedStatesPhoneNumber3]);
 }
 
@@ -376,8 +394,12 @@
                                              withUserRegion:@"US"]);
   // User in the States, language French, no data for French, so we fallback to English detailed
   // data.
-  XCTAssertEqualObjects(@"Australia", [self.geocoder descriptionForNumber:self.australianPhoneNumber
-                                                           withUserRegion:@"US"]);
+  NSString *languageCode = [[NSLocale preferredLanguages] firstObject];
+  XCTAssertEqualObjects([self.geocoder descriptionForNumber:self.australianPhoneNumber
+                                          withLanguageCode:languageCode
+                                            withUserRegion:@"US"],
+                        [self.geocoder descriptionForNumber:self.australianPhoneNumber
+                                             withUserRegion:@"US"]);
   // An invalid phone number is expected to return nil
   XCTAssertNil([self.geocoder descriptionForNumber:self.invalidUSPhoneNumber
                                   withLanguageCode:@"en"
@@ -392,7 +414,9 @@
 - (void)testConvenienceGetDescriptionForNonGeographicalNumber {
   // This phone number should return the country name rather than searching for a region description
   // since the phone number is nongeographical.
-  XCTAssertEqualObjects(@"South Korea",
+  NSString *languageCode = [[NSLocale preferredLanguages] firstObject];
+  XCTAssertEqualObjects([self.geocoder descriptionForNumber:self.koreanMobilePhoneNumber
+                                          withLanguageCode:languageCode],
                         [self.geocoder descriptionForNumber:self.koreanMobilePhoneNumber]);
 }
 

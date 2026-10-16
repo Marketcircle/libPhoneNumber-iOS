@@ -1,0 +1,3 @@
+@_exported import libPhoneNumberSwiftCore
+@_exported import libPhoneNumberSwiftGeocoding
+@_exported import libPhoneNumberSwiftShortNumber

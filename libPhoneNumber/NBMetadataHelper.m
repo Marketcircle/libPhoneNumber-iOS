@@ -7,7 +7,10 @@
 //
 
 #import "NBMetadataHelper.h"
-#import "NBGeneratedPhoneNumberMetaData.h"
+
+#import <os/lock.h>
+
+#import <NBGeneratedPhoneNumberMetaData.h>
 #import "NBPhoneMetaData.h"
 
 @interface NBMetadataHelper ()
@@ -33,7 +36,11 @@ static NSString *StringByTrimming(NSString *aString) {
 @implementation NBMetadataHelper {
  @private
   NSDictionary *_phoneNumberDataDictionary;
+  // Lazily derived from _phoneNumberDataDictionary. Guarded by
+  // _countryCodeToCountryNumberLock because the helper is shared by the
+  // NBPhoneNumberUtil singleton and can be reached from multiple threads.
   NSDictionary *_countryCodeToCountryNumberDictionary;
+  os_unfair_lock _countryCodeToCountryNumberLock;
 }
 
 - (instancetype)init {
@@ -54,6 +61,7 @@ static NSString *StringByTrimming(NSString *aString) {
   self = [super init];
 
   if (self != nil) {
+    _countryCodeToCountryNumberLock = OS_UNFAIR_LOCK_INIT;
     _metadataCache = [[NSCache alloc] init];
     _metadataMapCache = [[NSCache alloc] init];
     _phoneNumberDataDictionary =
@@ -73,6 +81,8 @@ static NSString *StringByTrimming(NSString *aString) {
  */
 
 - (NSDictionary *)countryCodeToCountryNumberDictionary {
+  os_unfair_lock_lock(&_countryCodeToCountryNumberLock);
+
   if (_countryCodeToCountryNumberDictionary == nil) {
     NSDictionary *countryCodeToRegionCodeMap = [self countryCodeToRegionCodeDictionary];
     NSMutableDictionary *map = [[NSMutableDictionary alloc] init];
@@ -85,7 +95,10 @@ static NSString *StringByTrimming(NSString *aString) {
     _countryCodeToCountryNumberDictionary = [map copy];
   }
 
-  return _countryCodeToCountryNumberDictionary;
+  NSDictionary *result = _countryCodeToCountryNumberDictionary;
+  os_unfair_lock_unlock(&_countryCodeToCountryNumberLock);
+
+  return result;
 }
 
 - (NSDictionary *)countryCodeToRegionCodeDictionary {
@@ -149,7 +162,7 @@ static NSString *StringByTrimming(NSString *aString) {
  * @param {?string} regionCode
  * @return {i18n.phonenumbers.PhoneMetadata}
  */
-- (NBPhoneMetaData *)getMetadataForRegion:(NSString *)regionCode {
+- (NBPhoneMetaData * _Nullable)getMetadataForRegion:(NSString * _Nonnull)regionCode {
   regionCode = StringByTrimming(regionCode);
   if (regionCode.length == 0) {
     return nil;
@@ -178,12 +191,12 @@ static NSString *StringByTrimming(NSString *aString) {
  * @param countryCallingCode countryCallingCode
  * @return {i18n.phonenumbers.PhoneMetadata}
  */
-- (NBPhoneMetaData *)getMetadataForNonGeographicalRegion:(NSNumber *)countryCallingCode {
+- (NBPhoneMetaData * _Nullable)getMetadataForNonGeographicalRegion:(NSNumber * _Nonnull)countryCallingCode {
   NSString *countryCallingCodeStr = countryCallingCode.stringValue;
   return [self getMetadataForRegion:countryCallingCodeStr];
 }
 
-+ (BOOL)hasValue:(NSString *)string {
++ (BOOL)hasValue:(NSString * _Nonnull)string {
   string = StringByTrimming(string);
   return string.length != 0;
 }

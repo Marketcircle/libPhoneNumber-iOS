@@ -13,130 +13,145 @@
 
 @interface NBPhoneNumberUtil : NSObject
 
-+ (NBPhoneNumberUtil *)sharedInstance;
-- (instancetype)initWithMetadataHelper:(NBMetadataHelper *)helper;
++ (NBPhoneNumberUtil * _Nonnull)sharedInstance;
+- (instancetype _Nonnull)initWithMetadataHelper:(NBMetadataHelper * _Nonnull)helper;
 
-@property(nonatomic, strong, readonly) NSDictionary *DIGIT_MAPPINGS;
+- (instancetype _Nonnull)init NS_UNAVAILABLE;
+
+@property(nonatomic, strong, readonly, nonnull) NSDictionary * DIGIT_MAPPINGS;
 
 // regular expressions
-- (NSArray *)matchesByRegex:(NSString *)sourceString regex:(NSString *)pattern;
-- (NSArray *)matchedStringByRegex:(NSString *)sourceString regex:(NSString *)pattern;
-- (NSString *)replaceStringByRegex:(NSString *)sourceString
-                             regex:(NSString *)pattern
-                      withTemplate:(NSString *)templateString;
-- (int)stringPositionByRegex:(NSString *)sourceString regex:(NSString *)pattern;
+- (NSArray * _Nullable)matchesByRegex:(NSString * _Nonnull)sourceString regex:(NSString * _Nonnull)pattern;
+- (NSArray * _Nullable)matchedStringByRegex:(NSString * _Nonnull)sourceString regex:(NSString * _Nonnull)pattern;
+- (NSString * _Nonnull)replaceStringByRegex:(NSString * _Nonnull)sourceString
+                                      regex:(NSString * _Nonnull)pattern
+                               withTemplate:(NSString * _Nonnull)templateString;
+- (int)stringPositionByRegex:(NSString * _Nullable)sourceString regex:(NSString * _Nullable)pattern;
 
 // libPhoneNumber Util functions
-- (NSString *)convertAlphaCharactersInNumber:(NSString *)number;
+- (NSString * _Nonnull)convertAlphaCharactersInNumber:(NSString * _Nonnull)number;
 
-- (NSString *)normalize:(NSString *)phoneNumber;
-- (NSString *)normalizeDigitsOnly:(NSString *)number;
-- (NSString *)normalizeDiallableCharsOnly:(NSString *)number;
+- (NSString * _Nonnull)normalize:(NSString * _Nonnull)number;
+- (NSString * _Nonnull)normalizeDigitsOnly:(NSString * _Nonnull)number;
+- (NSString * _Nonnull)normalizeDiallableCharsOnly:(NSString * _Nonnull)number;
 
-- (BOOL)isNumberGeographical:(NBPhoneNumber *)phoneNumber;
+- (BOOL)isNumberGeographical:(NBPhoneNumber * _Nonnull)phoneNumber;
 
-- (NSString *)extractPossibleNumber:(NSString *)phoneNumber;
-- (NSNumber *)extractCountryCode:(NSString *)fullNumber nationalNumber:(NSString **)nationalNumber;
-#if TARGET_OS_IOS
-- (NSString *)countryCodeByCarrier;
-#endif
+- (NSString * _Nonnull)extractPossibleNumber:(NSString * _Nonnull)number;
+- (NSNumber * _Nonnull)extractCountryCode:(NSString * _Nonnull)fullNumber nationalNumber:(NSString * _Nullable * _Nullable)nationalNumber;
+- (NSString * _Nonnull)countryCodeByCarrier;
 
-- (NSString *)getNddPrefixForRegion:(NSString *)regionCode stripNonDigits:(BOOL)stripNonDigits;
-- (NSString *)getNationalSignificantNumber:(NBPhoneNumber *)phoneNumber;
+- (NSString * _Nullable)getNddPrefixForRegion:(NSString * _Nullable)regionCode stripNonDigits:(BOOL)stripNonDigits;
+- (NSString * _Nonnull)getNationalSignificantNumber:(NBPhoneNumber * _Nonnull)phoneNumber;
 
-- (NSArray *)getSupportedRegions;
+- (NBPhoneMetaData * _Nullable)getMetadataForRegion:(NSString * _Nullable)regionCode;
+- (NBPhoneMetaData * _Nullable)getMetadataForNonGeographicalRegion:(NSNumber * _Nullable)countryCallingCode;
+- (NSArray * _Nullable)getSupportedRegions;
+- (NSArray<NSNumber *> * _Nonnull)getSupportedCallingCodes;
+- (NSArray<NSNumber *> * _Nonnull)getSupportedGlobalNetworkCallingCodes;
+- (NSArray<NSNumber *> * _Nonnull)getSupportedTypesForRegion:(NSString * _Nullable)regionCode;
+- (NSArray<NSNumber *> * _Nonnull)getSupportedTypesForNonGeoEntity:(NSNumber * _Nonnull)countryCallingCode;
 
-- (NBEPhoneNumberType)getNumberType:(NBPhoneNumber *)phoneNumber;
+- (NBEPhoneNumberType)getNumberType:(NBPhoneNumber * _Nonnull)phoneNumber;
 
-- (NSNumber *)getCountryCodeForRegion:(NSString *)regionCode;
+- (NSNumber * _Nonnull)getCountryCodeForRegion:(NSString * _Nullable)regionCode;
 
-- (NSString *)getRegionCodeForCountryCode:(NSNumber *)countryCallingCode;
-- (NSArray *)getRegionCodesForCountryCode:(NSNumber *)countryCallingCode;
-- (NSString *)getRegionCodeForNumber:(NBPhoneNumber *)phoneNumber;
+- (NSString * _Nonnull)getRegionCodeForCountryCode:(NSNumber * _Nonnull)countryCallingCode;
+- (NSArray * _Nullable)getRegionCodesForCountryCode:(NSNumber * _Nonnull)countryCallingCode;
+- (NSString * _Nullable)getRegionCodeForNumber:(NBPhoneNumber * _Nullable)phoneNumber;
 
-- (NBPhoneNumber *)getExampleNumber:(NSString *)regionCode error:(NSError **)error;
-- (NBPhoneNumber *)getExampleNumberForType:(NSString *)regionCode
-                                      type:(NBEPhoneNumberType)type
-                                     error:(NSError **)error;
-- (NBPhoneNumber *)getExampleNumberForNonGeoEntity:(NSNumber *)countryCallingCode
-                                             error:(NSError **)error;
+- (NBPhoneNumber * _Nullable)getExampleNumber:(NSString * _Nonnull)regionCode error:(NSError * _Nullable __autoreleasing * _Nullable)error;
+- (NBPhoneNumber * _Nullable)getExampleNumberForType:(NSString * _Nonnull)regionCode
+                                                type:(NBEPhoneNumberType)type
+                                               error:(NSError * _Nullable __autoreleasing * _Nullable)error;
+- (NBPhoneNumber * _Nullable)getExampleNumberForNonGeoEntity:(NSNumber * _Nonnull)countryCallingCode
+                                                       error:(NSError * _Nullable * _Nullable)error;
 
-- (BOOL)canBeInternationallyDialled:(NBPhoneNumber *)number error:(NSError **)error;
+- (BOOL)canBeInternationallyDialled:(NBPhoneNumber * _Nonnull)number error:(NSError * _Nullable * _Nullable)error;
 
-- (BOOL)truncateTooLongNumber:(NBPhoneNumber *)number;
+- (BOOL)truncateTooLongNumber:(NBPhoneNumber * _Nonnull)number;
 
-- (BOOL)isValidNumber:(NBPhoneNumber *)number;
-- (BOOL)isViablePhoneNumber:(NSString *)phoneNumber;
-- (BOOL)isAlphaNumber:(NSString *)number;
-- (BOOL)isValidNumberForRegion:(NBPhoneNumber *)number regionCode:(NSString *)regionCode;
-- (BOOL)isNANPACountry:(NSString *)regionCode;
-- (BOOL)isLeadingZeroPossible:(NSNumber *)countryCallingCode;
+- (BOOL)isValidNumber:(NBPhoneNumber * _Nonnull)number;
+- (BOOL)isViablePhoneNumber:(NSString * _Nonnull)phoneNumber;
+- (BOOL)isAlphaNumber:(NSString * _Nonnull)number;
+- (BOOL)isValidNumberForRegion:(NBPhoneNumber * _Nonnull)number regionCode:(NSString * _Nonnull)regionCode;
+- (BOOL)isNANPACountry:(NSString * _Nullable)regionCode;
+- (BOOL)isLeadingZeroPossible:(NSNumber * _Nonnull)countryCallingCode;
 
-- (NBEValidationResult)isPossibleNumberWithReason:(NBPhoneNumber *)number error:(NSError **)error;
+- (NBEValidationResult)isPossibleNumberWithReason:(NBPhoneNumber * _Nonnull)number
+                                            error:(NSError * _Nullable * _Nullable)error;
 
-- (BOOL)isPossibleNumber:(NBPhoneNumber *)number;
-- (BOOL)isPossibleNumber:(NBPhoneNumber *)number error:(NSError **)error;
-- (BOOL)isPossibleNumberString:(NSString *)number
-             regionDialingFrom:(NSString *)regionDialingFrom
-                         error:(NSError **)error;
+- (BOOL)isPossibleNumber:(NBPhoneNumber * _Nonnull)number;
+- (BOOL)isPossibleNumber:(NBPhoneNumber * _Nonnull)number error:(NSError * _Nullable * _Nullable)error;
+- (BOOL)isPossibleNumber:(NBPhoneNumber * _Nonnull)number forType:(NBEPhoneNumberType)type;
+- (NBEValidationResult)isPossibleNumberWithReason:(NBPhoneNumber * _Nonnull)number
+                                          forType:(NBEPhoneNumberType)type;
+- (BOOL)isPossibleNumberString:(NSString * _Nonnull)number
+             regionDialingFrom:(NSString * _Nullable)regionDialingFrom
+                         error:(NSError * _Nullable * _Nullable)error;
 
-- (NBEMatchType)isNumberMatch:(id)firstNumberIn second:(id)secondNumberIn error:(NSError **)error;
+- (NBEMatchType)isNumberMatch:(id _Nonnull)firstNumberIn second:(id _Nonnull)secondNumberIn error:(NSError * _Nullable * _Nullable)error;
 
-- (int)getLengthOfGeographicalAreaCode:(NBPhoneNumber *)phoneNumber error:(NSError **)error;
-- (int)getLengthOfNationalDestinationCode:(NBPhoneNumber *)phoneNumber error:(NSError **)error;
+- (int)getLengthOfGeographicalAreaCode:(NBPhoneNumber * _Nonnull)phoneNumber error:(NSError * _Nullable * _Nullable)error;
+- (int)getLengthOfNationalDestinationCode:(NBPhoneNumber * _Nonnull)phoneNumber error:(NSError * _Nullable * _Nullable)error;
 
-- (BOOL)maybeStripNationalPrefixAndCarrierCode:(NSString **)numberStr
-                                      metadata:(NBPhoneMetaData *)metadata
-                                   carrierCode:(NSString **)carrierCode;
-- (NBECountryCodeSource)maybeStripInternationalPrefixAndNormalize:(NSString **)numberStr
-                                                possibleIddPrefix:(NSString *)possibleIddPrefix;
+- (BOOL)maybeStripNationalPrefixAndCarrierCode:(NSString * _Nullable * _Nullable)number
+                                      metadata:(NBPhoneMetaData * _Nonnull)metadata
+                                   carrierCode:(NSString * _Nullable * _Nullable)carrierCode;
+- (NSString * _Nonnull)maybeStripExtension:(NSString * _Nonnull * _Nonnull)number;
+- (NBECountryCodeSource)maybeStripInternationalPrefixAndNormalize:(NSString * _Nullable * _Nullable)numberStr
+                                                possibleIddPrefix:(NSString * _Nonnull)possibleIddPrefix;
 
-- (NSNumber *)maybeExtractCountryCode:(NSString *)number
-                             metadata:(NBPhoneMetaData *)defaultRegionMetadata
-                       nationalNumber:(NSString **)nationalNumber
-                         keepRawInput:(BOOL)keepRawInput
-                          phoneNumber:(NBPhoneNumber **)phoneNumber
-                                error:(NSError **)error;
+- (NSNumber * _Nonnull)maybeExtractCountryCode:(NSString * _Nonnull)number
+                                      metadata:(NBPhoneMetaData * _Nullable)defaultRegionMetadata
+                                nationalNumber:(NSString * _Nullable * _Nullable)nationalNumber
+                                  keepRawInput:(BOOL)keepRawInput
+                                   phoneNumber:(NBPhoneNumber * _Nullable * _Nullable)phoneNumber
+                                         error:(NSError * _Nullable * _Nullable)error;
 
-- (NBPhoneNumber *)parse:(NSString *)numberToParse
-           defaultRegion:(NSString *)defaultRegion
-                   error:(NSError **)error;
-- (NBPhoneNumber *)parseAndKeepRawInput:(NSString *)numberToParse
-                          defaultRegion:(NSString *)defaultRegion
-                                  error:(NSError **)error;
-- (NBPhoneNumber *)parseWithPhoneCarrierRegion:(NSString *)numberToParse error:(NSError **)error;
+- (NBPhoneNumber * _Nullable)parse:(NSString * _Nullable)numberToParse
+                     defaultRegion:(NSString * _Nullable)defaultRegion
+                             error:(NSError * _Nullable * _Nullable)error;
+- (NBPhoneNumber * _Nullable)parseAndKeepRawInput:(NSString * _Nonnull)numberToParse
+                                    defaultRegion:(NSString * _Nullable)defaultRegion
+                                            error:(NSError * _Nullable * _Nullable)error;
+- (NBPhoneNumber * _Nullable)parseWithPhoneCarrierRegion:(NSString * _Nullable)numberToParse
+                                                   error:(NSError * _Nullable * _Nullable)error;
 
-- (NSString *)format:(NBPhoneNumber *)phoneNumber
-        numberFormat:(NBEPhoneNumberFormat)numberFormat
-               error:(NSError **)error;
-- (NSString *)format:(NBPhoneNumber *)phoneNumber
-        numberFormat:(NBEPhoneNumberFormat)numberFormat
-preserveExtensionDelimiter:(BOOL)preserveExtensionDelimiter
-               error:(NSError **)error;
-- (NSString *)formatByPattern:(NBPhoneNumber *)number
+- (NSString * _Nullable)format:(NBPhoneNumber * _Nonnull)phoneNumber
+                  numberFormat:(NBEPhoneNumberFormat)numberFormat
+                         error:(NSError * _Nullable * _Nullable)error;
+/** Formats a number, optionally retaining its parsed extension label and normalized surrounding whitespace.
+ * Returns nil and sets error when formatting fails. RFC3966 always uses its standard extension syntax.
+ */
+- (NSString * _Nullable)format:(NBPhoneNumber * _Nonnull)phoneNumber
                  numberFormat:(NBEPhoneNumberFormat)numberFormat
-           userDefinedFormats:(NSArray *)userDefinedFormats
-                        error:(NSError **)error;
-- (NSString *)formatNumberForMobileDialing:(NBPhoneNumber *)number
-                         regionCallingFrom:(NSString *)regionCallingFrom
-                            withFormatting:(BOOL)withFormatting
-                                     error:(NSError **)error;
-- (NSString *)formatOutOfCountryCallingNumber:(NBPhoneNumber *)number
-                            regionCallingFrom:(NSString *)regionCallingFrom
-                                        error:(NSError **)error;
-- (NSString *)formatOutOfCountryKeepingAlphaChars:(NBPhoneNumber *)number
-                                regionCallingFrom:(NSString *)regionCallingFrom
-                                            error:(NSError **)error;
-- (NSString *)formatNationalNumberWithCarrierCode:(NBPhoneNumber *)number
-                                      carrierCode:(NSString *)carrierCode
-                                            error:(NSError **)error;
-- (NSString *)formatInOriginalFormat:(NBPhoneNumber *)number
-                   regionCallingFrom:(NSString *)regionCallingFrom
-                               error:(NSError **)error;
-- (NSString *)formatNationalNumberWithPreferredCarrierCode:(NBPhoneNumber *)number
-                                       fallbackCarrierCode:(NSString *)fallbackCarrierCode
-                                                     error:(NSError **)error;
-- (BOOL)formattingRuleHasFirstGroupOnly:(NSString *)nationalPrefixFormattingRule;
+   preserveExtensionDelimiter:(BOOL)preserveExtensionDelimiter
+                        error:(NSError * _Nullable * _Nullable)error;
+- (NSString * _Nullable)formatByPattern:(NBPhoneNumber * _Nonnull)number
+                           numberFormat:(NBEPhoneNumberFormat)numberFormat
+                     userDefinedFormats:(NSArray * _Nullable)userDefinedFormats
+                                  error:(NSError * _Nullable * _Nullable)error;
+- (NSString * _Nullable)formatNumberForMobileDialing:(NBPhoneNumber * _Nonnull)number
+                                   regionCallingFrom:(NSString * _Nonnull)regionCallingFrom
+                                      withFormatting:(BOOL)withFormatting
+                                               error:(NSError * _Nullable * _Nullable)error;
+- (NSString * _Nullable)formatOutOfCountryCallingNumber:(NBPhoneNumber * _Nonnull)number
+                                      regionCallingFrom:(NSString * _Nonnull)regionCallingFrom
+                                                  error:(NSError * _Nullable * _Nullable)error;
+- (NSString * _Nullable)formatOutOfCountryKeepingAlphaChars:(NBPhoneNumber * _Nonnull)number
+                                          regionCallingFrom:(NSString * _Nonnull)regionCallingFrom
+                                                      error:(NSError * _Nullable * _Nullable)error;
+- (NSString * _Nullable)formatNationalNumberWithCarrierCode:(NBPhoneNumber * _Nonnull)number
+                                                carrierCode:(NSString * _Nullable)carrierCode
+                                                      error:(NSError * _Nullable * _Nullable)error;
+- (NSString * _Nullable)formatInOriginalFormat:(NBPhoneNumber * _Nonnull)number
+                             regionCallingFrom:(NSString * _Nonnull)regionCallingFrom
+                                         error:(NSError * _Nullable * _Nullable)error;
+- (NSString * _Nullable)formatNationalNumberWithPreferredCarrierCode:(NBPhoneNumber * _Nonnull)number
+                                       fallbackCarrierCode:(NSString * _Nonnull)fallbackCarrierCode
+                                                     error:(NSError * _Nullable * _Nullable)error;
+- (BOOL)formattingRuleHasFirstGroupOnly:(NSString * _Nullable)nationalPrefixFormattingRule;
 
 /**
  * Returns the mobile token for the provided country calling code if it has one, otherwise
@@ -146,6 +161,6 @@ preserveExtensionDelimiter:(BOOL)preserveExtensionDelimiter
  * @param countryCallingCode  the country calling code for which we want the mobile token.
  * @return  the mobile token, as a string, for the given country calling code.
  */
-- (NSString *)getCountryMobileTokenFromCountryCode:(NSInteger)countryCallingCode;
+- (NSString * _Nonnull)getCountryMobileTokenFromCountryCode:(NSInteger)countryCallingCode;
 
 @end

@@ -4,140 +4,695 @@
 //  metadataGenerator.swift
 //  libPhoneNumber-iOS
 //
-//  Created by Paween Itthipalkul on 2/16/18.
-//  Copyright © 2018 Google LLC. All rights reserved.
+//  Downloads libphonenumber JavaScript metadata from google/libphonenumber,
+//  converts it to JSON, and regenerates the embedded gzip byte arrays used by
+//  the Objective-C targets.
 //
 
 import Darwin
 import Foundation
 import JavaScriptCore
 
-enum GeneratorError: Error {
-  case dataNotString
-  case genericError
+enum ScriptError: Error, CustomStringConvertible {
+  case invalidArguments(String)
+  case downloadFailed(URL, String)
+  case invalidResponse(URL)
+  case invalidUTF8(URL)
+  case javascriptException(String)
+  case missingJavaScriptValue(String)
+  case invalidJSON(String)
+  case processFailed(String)
+
+  var description: String {
+    switch self {
+    case .invalidArguments(let message):
+      return message
+    case .downloadFailed(let url, let message):
+      return "Failed to download \(url.absoluteString): \(message)"
+    case .invalidResponse(let url):
+      return "Unexpected response while downloading \(url.absoluteString)"
+    case .invalidUTF8(let url):
+      return "Downloaded data is not UTF-8: \(url.absoluteString)"
+    case .javascriptException(let message):
+      return "JavaScript evaluation failed: \(message)"
+    case .missingJavaScriptValue(let variable):
+      return "JavaScript metadata variable was not produced: \(variable)"
+    case .invalidJSON(let message):
+      return "Invalid generated JSON: \(message)"
+    case .processFailed(let message):
+      return message
+    }
+  }
 }
 
-func synchronouslyLoadStringResource(from url: URL) throws -> String {
-  let session = URLSession(configuration: .default)
-  var resultData: Data?
-  var resultError: Error?
-  let semaphore = DispatchSemaphore(value: 0)
+struct Options {
+  var ref: String?
+  var prettyPrintJSON = false
+  var jsonOnly = false
+  var packOnly = false
+  var dryRun = false
+}
 
-  let dataTask = session.dataTask(with: url) { data, _, error in
-    resultData = data
-    resultError = error
-    semaphore.signal()
-  }
-  dataTask.resume()
+struct GitHubObject: Decodable {
+  let sha: String
+  let type: String
+  let url: String?
+}
 
-  semaphore.wait()
+struct GitHubRefResponse: Decodable {
+  let object: GitHubObject
+}
 
-  if let error = resultError {
-    throw error
-  }
+struct GitHubTagResponse: Decodable {
+  let object: GitHubObject
+}
 
-  if let data = resultData {
-    guard let string = String(data: data, encoding: .utf8) else {
-      throw GeneratorError.dataNotString
+struct MetadataSource: CaseIterable {
+  let displayName: String
+  let remoteFileName: String
+  let jsonFileName: String
+  let jsVariable: String
+
+  static let phoneNumber = MetadataSource(
+    displayName: "PhoneNumber metadata",
+    remoteFileName: "metadata.js",
+    jsonFileName: "PhoneNumberMetaData.json",
+    jsVariable: "i18n.phonenumbers.metadata"
+  )
+
+  static let phoneNumberForTesting = MetadataSource(
+    displayName: "PhoneNumber testing metadata",
+    remoteFileName: "metadatafortesting.js",
+    jsonFileName: "PhoneNumberMetaDataForTesting.json",
+    jsVariable: "i18n.phonenumbers.metadata"
+  )
+
+  static let shortNumber = MetadataSource(
+    displayName: "ShortNumber metadata",
+    remoteFileName: "shortnumbermetadata.js",
+    jsonFileName: "ShortNumberMetadata.json",
+    jsVariable: "i18n.phonenumbers.shortnumbermetadata"
+  )
+
+  static let allCases: [MetadataSource] = [
+    .phoneNumber,
+    .phoneNumberForTesting,
+    .shortNumber
+  ]
+}
+
+let ANSIReset = "\u{001B}[0m"
+let ANSIRed = "\u{001B}[31m"
+let ANSIYellow = "\u{001B}[33m"
+
+func printWarning(_ message: String) {
+  fputs("\(ANSIYellow)\(message)\n\(ANSIReset)", stderr)
+}
+
+func printError(_ message: String) {
+  fputs("\(ANSIRed)\(message)\n\(ANSIReset)", stderr)
+}
+
+func usage() -> String {
+  return """
+  Usage:
+    ./metadataGenerator.swift <version|master|ref> [--pretty|-p] [--json-only] [--dry-run]
+    ./metadataGenerator.swift --pack-only [--dry-run]
+
+  Examples:
+    ./metadataGenerator.swift 9.0.29 --pretty
+    ./metadataGenerator.swift v9.0.29 --pretty
+    ./metadataGenerator.swift master --dry-run
+    ./metadataGenerator.swift --pack-only
+
+  Notes:
+    - Numeric versions are normalized to GitHub tags, e.g. 9.0.29 -> v9.0.29.
+    - By default, generated Objective-C metadata files are built from compact JSON.
+    - When --pretty is passed, generatedJSON files are written pretty-printed after
+      the compact JSON has been used for the embedded gzip payloads.
+    - --pack-only regenerates Objective-C metadata files from existing generatedJSON.
+  """
+}
+
+func parseArguments(_ arguments: [String]) throws -> Options {
+  var options = Options()
+  var index = 1
+
+  while index < arguments.count {
+    let argument = arguments[index]
+
+    switch argument {
+    case "-h", "--help":
+      print(usage())
+      exit(0)
+    case "-p", "--pretty":
+      options.prettyPrintJSON = true
+    case "--json-only":
+      options.jsonOnly = true
+    case "--pack-only":
+      options.packOnly = true
+    case "--dry-run":
+      options.dryRun = true
+    case "-v", "--version":
+      index += 1
+      guard index < arguments.count else {
+        throw ScriptError.invalidArguments("\(argument) requires a version value")
+      }
+      options.ref = arguments[index]
+    default:
+      if argument.hasPrefix("-v"), argument.count > 2 {
+        options.ref = String(argument.dropFirst(2))
+      } else if argument.hasPrefix("--version=") {
+        options.ref = String(argument.dropFirst("--version=".count))
+      } else if argument.hasPrefix("-") {
+        throw ScriptError.invalidArguments("Unknown argument: \(argument)\n\n\(usage())")
+      } else if options.ref == nil {
+        options.ref = argument
+      } else {
+        throw ScriptError.invalidArguments("Unexpected extra argument: \(argument)\n\n\(usage())")
+      }
     }
 
-    return string
+    index += 1
   }
 
-  throw GeneratorError.genericError
-}
-
-func loadJS(from url: URL, to context: JSContext) {
-  guard let script = try? synchronouslyLoadStringResource(from: url) else {
-    fputs("Cannot load dependency at \(url)\n", __stderrp)
-    exit(1)
+  if options.packOnly {
+    return options
   }
 
-  context.evaluateScript(script)
+  guard options.ref != nil else {
+    throw ScriptError.invalidArguments("Must specify a metadata version, branch, commit, or 'master'.\n\n\(usage())")
+  }
+
+  return options
 }
 
-// Create JavaScript context.
-let context = JSContext()!
-context.exceptionHandler = { _, exception in
-  fputs("Javascript exception thrown: \(exception!)\n", __stderrp)
-//  exit(1)
+func isNumericVersion(_ value: String) -> Bool {
+  let pattern = #"^\d+(\.\d+){0,2}$"#
+  return value.range(of: pattern, options: .regularExpression) != nil
 }
 
-// Load required dependencies.
-let googleClosure = URL(
-  string: "http://cdn.rawgit.com/google/closure-library/master/closure/goog/base.js")!
-loadJS(from: googleClosure, to: context)
+func normalizedGitRef(_ value: String) -> String {
+  let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+  if isNumericVersion(trimmed) {
+    return "v\(trimmed)"
+  }
 
-let jQuery = URL(string: "http://code.jquery.com/jquery-1.8.3.min.js")!
-loadJS(from: jQuery, to: context)
+  if trimmed.hasPrefix("v") {
+    let version = String(trimmed.dropFirst())
+    if isNumericVersion(version) {
+      return trimmed
+    }
+  }
 
-// Evaluate requires.
-let requires = """
-  goog.require('goog.proto2.Message');
-  goog.require('goog.dom');
-  goog.require('goog.json');
-  goog.require('goog.array');
-  goog.require('goog.proto2.ObjectSerializer');
-  goog.require('goog.string.StringBuffer');
-  goog.require('i18n.phonenumbers.metadata');
-  """
-context.evaluateScript(requires)
+  return trimmed
+}
 
-// Load metadata file from GitHub.
-let phoneMetadata = URL(string: "https://raw.githubusercontent.com/google/libphonenumber/master/javascript/i18n/phonenumbers/metadata.js")!
-let phoneMetadataForTesting = URL(string: "https://raw.githubusercontent.com/google/libphonenumber/master/javascript/i18n/phonenumbers/metadatafortesting.js")!
-let shortNumberMetadata = URL(string: "https://raw.githubusercontent.com/google/libphonenumber/master/javascript/i18n/phonenumbers/shortnumbermetadata.js")!
+func absoluteURL(forPath path: String) -> URL {
+  if path.hasPrefix("/") {
+    return URL(fileURLWithPath: path)
+  }
 
-let currentDir = FileManager.default.currentDirectoryPath
-let baseURL = URL(fileURLWithPath: currentDir).appendingPathComponent("generatedJSON")
-try? FileManager.default.createDirectory(at: baseURL, withIntermediateDirectories: true)
+  return URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
+    .appendingPathComponent(path)
+    .standardizedFileURL
+}
 
-// Phone metadata.
+let scriptURL = absoluteURL(forPath: CommandLine.arguments[0])
+let scriptsDirectory = scriptURL.deletingLastPathComponent()
+let repositoryRoot = scriptsDirectory.deletingLastPathComponent()
+let generatedJSONDirectory = repositoryRoot.appendingPathComponent("generatedJSON")
+
+func rawMetadataURL(ref: String, fileName: String) -> URL {
+  return URL(string: "https://raw.githubusercontent.com/google/libphonenumber/\(ref)/javascript/i18n/phonenumbers/\(fileName)")!
+}
+
+func runSection<T>(_ name: String, block: () throws -> T) rethrows -> T {
+  print("\(name)... ", terminator: "")
+  let result = try block()
+  print("Done")
+  return result
+}
+
+func githubAPIToken() -> String? {
+  let environment = ProcessInfo.processInfo.environment
+  for key in ["GITHUB_TOKEN", "GH_TOKEN"] {
+    if let token = environment[key]?.trimmingCharacters(in: .whitespacesAndNewlines),
+       !token.isEmpty {
+      return token
+    }
+  }
+  return nil
+}
+
+func isVersionTag(_ ref: String) -> Bool {
+  ref.range(of: #"^v\d+\.\d+\.\d+$"#, options: .regularExpression) != nil
+}
+
+func resolvedRawGitRef(_ ref: String) throws -> String {
+  guard isVersionTag(ref) else {
+    return ref
+  }
+
+  let escapedRef = ref.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? ref
+  let refURL = URL(string: "https://api.github.com/repos/google/libphonenumber/git/ref/tags/\(escapedRef)")!
+  let refResponse = try JSONDecoder().decode(GitHubRefResponse.self, from: downloadData(from: refURL))
+
+  guard refResponse.object.type == "tag",
+        let tagURLString = refResponse.object.url,
+        let tagURL = URL(string: tagURLString) else {
+    return refResponse.object.sha
+  }
+
+  let tagResponse = try JSONDecoder().decode(GitHubTagResponse.self, from: downloadData(from: tagURL))
+  return tagResponse.object.type == "commit" ? tagResponse.object.sha : refResponse.object.sha
+}
+
+func downloadData(from url: URL, attempts: Int = 3) throws -> Data {
+  var lastError: Error?
+
+  for attempt in 1...attempts {
+    let semaphore = DispatchSemaphore(value: 0)
+    var resultData: Data?
+    var resultResponse: URLResponse?
+    var resultError: Error?
+
+    var request = URLRequest(url: url)
+    request.timeoutInterval = 60
+    request.setValue("libPhoneNumber-iOS metadataGenerator", forHTTPHeaderField: "User-Agent")
+    if url.host == "api.github.com" {
+      request.setValue("application/vnd.github+json", forHTTPHeaderField: "Accept")
+      request.setValue("2022-11-28", forHTTPHeaderField: "X-GitHub-Api-Version")
+      if let token = githubAPIToken() {
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+      }
+    }
+
+    let task = URLSession.shared.dataTask(with: request) { data, response, error in
+      resultData = data
+      resultResponse = response
+      resultError = error
+      semaphore.signal()
+    }
+    task.resume()
+    semaphore.wait()
+
+    if let error = resultError {
+      lastError = error
+    } else if let httpResponse = resultResponse as? HTTPURLResponse {
+      guard (200...299).contains(httpResponse.statusCode) else {
+        lastError = ScriptError.downloadFailed(url, "HTTP \(httpResponse.statusCode)")
+        if httpResponse.statusCode == 404 {
+          break
+        }
+        sleep(UInt32(attempt))
+        continue
+      }
+
+      guard let data = resultData else {
+        throw ScriptError.invalidResponse(url)
+      }
+
+      return data
+    } else {
+      throw ScriptError.invalidResponse(url)
+    }
+
+    if attempt < attempts {
+      sleep(UInt32(attempt))
+    }
+  }
+
+  throw ScriptError.downloadFailed(url, lastError?.localizedDescription ?? "unknown error")
+}
+
+func downloadString(from url: URL, attempts: Int = 3) throws -> String {
+  let data = try downloadData(from: url, attempts: attempts)
+  guard let string = String(data: data, encoding: .utf8) else {
+    throw ScriptError.invalidUTF8(url)
+  }
+  return string
+}
+
+func metadataJSONString(from javaScript: String, variable: String) throws -> String {
+  let context = JSContext()!
+  var exceptionMessage: String?
+
+  context.exceptionHandler = { _, exception in
+    exceptionMessage = exception?.toString() ?? "unknown JavaScript exception"
+  }
+
+  context.evaluateScript("""
+    var __metadataGlobal = this;
+    var goog = {
+      provide: function(name) {
+        var parts = name.split('.');
+        var cursor = __metadataGlobal;
+        for (var i = 0; i < parts.length; i++) {
+          if (typeof cursor[parts[i]] !== 'object' || cursor[parts[i]] === null) {
+            cursor[parts[i]] = {};
+          }
+          cursor = cursor[parts[i]];
+        }
+      },
+      require: function(_) {}
+    };
+    var i18n = { phonenumbers: {} };
+  """)
+
+  if let exceptionMessage {
+    throw ScriptError.javascriptException(exceptionMessage)
+  }
+
+  context.evaluateScript(javaScript)
+
+  if let exceptionMessage {
+    throw ScriptError.javascriptException(exceptionMessage)
+  }
+
+  guard let value = context.evaluateScript("JSON.stringify(\(variable))"),
+        !value.isUndefined,
+        !value.isNull,
+        let result = value.toString(),
+        result != "undefined" else {
+    throw ScriptError.missingJavaScriptValue(variable)
+  }
+
+  return result + "\n"
+}
+
+func jsonData(from jsonString: String) throws -> Data {
+  guard let data = jsonString.data(using: .utf8) else {
+    throw ScriptError.invalidJSON("Could not encode JSON string as UTF-8")
+  }
+
+  try validateMetadataJSON(data)
+  return data
+}
+
+func validateMetadataJSON(_ data: Data) throws {
+  let object = try JSONSerialization.jsonObject(with: data, options: [])
+  guard let dictionary = object as? [String: Any] else {
+    throw ScriptError.invalidJSON("top-level object is not a dictionary")
+  }
+
+  guard dictionary["countryCodeToRegionCodeMap"] is [String: Any] else {
+    throw ScriptError.invalidJSON("missing countryCodeToRegionCodeMap")
+  }
+
+  guard dictionary["countryToMetadata"] is [String: Any] else {
+    throw ScriptError.invalidJSON("missing countryToMetadata")
+  }
+}
+
+func prettyPrintedJSONData(from compactJSONData: Data) throws -> Data {
+  let object = try JSONSerialization.jsonObject(with: compactJSONData, options: [])
+  return try JSONSerialization.data(withJSONObject: object, options: [.prettyPrinted, .sortedKeys])
+    + Data("\n".utf8)
+}
+
+func write(_ data: Data, to url: URL, dryRun: Bool) throws {
+  if dryRun {
+    print("  would write \(url.path) (\(data.count) bytes)")
+    return
+  }
+
+  try FileManager.default.createDirectory(
+    at: url.deletingLastPathComponent(),
+    withIntermediateDirectories: true
+  )
+  try data.write(to: url, options: .atomic)
+  print("  wrote \(url.path) (\(data.count) bytes)")
+}
+
+func readExistingJSONFiles() throws -> [String: Data] {
+  var result: [String: Data] = [:]
+
+  for source in MetadataSource.allCases {
+    let url = generatedJSONDirectory.appendingPathComponent(source.jsonFileName)
+    let data = try Data(contentsOf: url)
+    try validateMetadataJSON(data)
+    result[source.jsonFileName] = data
+  }
+
+  return result
+}
+
+func gzipData(_ data: Data) throws -> Data {
+  let tempDirectory = FileManager.default.temporaryDirectory
+    .appendingPathComponent("libPhoneNumber-metadata-\(UUID().uuidString)", isDirectory: true)
+  try FileManager.default.createDirectory(at: tempDirectory, withIntermediateDirectories: true)
+  defer { try? FileManager.default.removeItem(at: tempDirectory) }
+
+  let inputURL = tempDirectory.appendingPathComponent("metadata.json")
+  try data.write(to: inputURL, options: .atomic)
+
+  let process = Process()
+  process.executableURL = URL(fileURLWithPath: "/usr/bin/gzip")
+  process.arguments = ["-n", "-c", inputURL.path]
+
+  let standardOutput = Pipe()
+  let standardError = Pipe()
+  process.standardOutput = standardOutput
+  process.standardError = standardError
+
+  try process.run()
+  let compressedData = standardOutput.fileHandleForReading.readDataToEndOfFile()
+  let errorData = standardError.fileHandleForReading.readDataToEndOfFile()
+  process.waitUntilExit()
+
+  guard process.terminationStatus == 0 else {
+    let errorText = String(data: errorData, encoding: .utf8) ?? "unknown gzip error"
+    throw ScriptError.processFailed("gzip failed: \(errorText)")
+  }
+
+  return compressedData
+}
+
+func cByteArray(name: String, data: Data) -> String {
+  let bytes = [UInt8](data)
+  var lines: [String] = ["z_const Bytef \(name)[] = {"]
+
+  for start in stride(from: 0, to: bytes.count, by: 12) {
+    let end = min(start + 12, bytes.count)
+    let values = bytes[start..<end].map { String(format: "0x%02x", $0) }.joined(separator: ", ")
+    lines.append("  \(values),")
+  }
+
+  lines.append("};")
+  return lines.joined(separator: "\n")
+}
+
+func generatedHeader(jsonFileName: String, byteArrayName: String, compressedLengthName: String, expandedLengthName: String) -> Data {
+  return Data("""
+  /*****
+   * Data generated by scripts/metadataGenerator.swift
+   * From \(jsonFileName)
+   */
+
+  #include <zlib.h>
+
+  // z_const is not defined in some versions of zlib, so define it here
+  // in case it has not been defined.
+  #if defined(ZLIB_CONST) && !defined(z_const)
+  #  define z_const const
+  #else
+  #  define z_const
+  #endif
+
+  extern z_const Bytef \(byteArrayName)[];
+  extern z_const size_t \(compressedLengthName);
+  extern z_const size_t \(expandedLengthName);
+  """.utf8)
+}
+
+func generatedImplementation(
+  headerName: String,
+  jsonFileName: String,
+  byteArrayName: String,
+  compressedLengthName: String,
+  expandedLengthName: String,
+  jsonData: Data
+) throws -> Data {
+  let compressedData = try gzipData(jsonData)
+  return Data("""
+  /*****
+   * Data generated by scripts/metadataGenerator.swift
+   * From \(jsonFileName)
+   */
+
+  #include "\(headerName)"
+
+  \(cByteArray(name: byteArrayName, data: compressedData))
+  z_const size_t \(compressedLengthName) = sizeof(\(byteArrayName));
+  z_const size_t \(expandedLengthName) = \(jsonData.count);
+  """.utf8)
+}
+
+func generateObjectiveCMetadataFiles(from jsonFiles: [String: Data], dryRun: Bool) throws {
+  let phoneJSON = jsonFiles[MetadataSource.phoneNumber.jsonFileName]!
+  let testingJSON = jsonFiles[MetadataSource.phoneNumberForTesting.jsonFileName]!
+  let shortJSON = jsonFiles[MetadataSource.shortNumber.jsonFileName]!
+
+  try write(
+    generatedHeader(
+      jsonFileName: MetadataSource.phoneNumber.jsonFileName,
+      byteArrayName: "kPhoneNumberMetaData",
+      compressedLengthName: "kPhoneNumberMetaDataCompressedLength",
+      expandedLengthName: "kPhoneNumberMetaDataExpandedLength"
+    ),
+    to: repositoryRoot.appendingPathComponent("libPhoneNumberInternal/NBGeneratedPhoneNumberMetaData.h"),
+    dryRun: dryRun
+  )
+
+  try write(
+    generatedImplementation(
+      headerName: "NBGeneratedPhoneNumberMetaData.h",
+      jsonFileName: MetadataSource.phoneNumber.jsonFileName,
+      byteArrayName: "kPhoneNumberMetaData",
+      compressedLengthName: "kPhoneNumberMetaDataCompressedLength",
+      expandedLengthName: "kPhoneNumberMetaDataExpandedLength",
+      jsonData: phoneJSON
+    ),
+    to: repositoryRoot.appendingPathComponent("libPhoneNumber/NBGeneratedPhoneNumberMetaData.m"),
+    dryRun: dryRun
+  )
+
+  try write(
+    generatedHeader(
+      jsonFileName: MetadataSource.shortNumber.jsonFileName,
+      byteArrayName: "kShortNumberMetaData",
+      compressedLengthName: "kShortNumberMetaDataCompressedLength",
+      expandedLengthName: "kShortNumberMetaDataExpandedLength"
+    ),
+    to: repositoryRoot.appendingPathComponent("libPhoneNumberShortNumberInternal/NBGeneratedShortNumberMetaData.h"),
+    dryRun: dryRun
+  )
+
+  try write(
+    generatedImplementation(
+      headerName: "NBGeneratedShortNumberMetaData.h",
+      jsonFileName: MetadataSource.shortNumber.jsonFileName,
+      byteArrayName: "kShortNumberMetaData",
+      compressedLengthName: "kShortNumberMetaDataCompressedLength",
+      expandedLengthName: "kShortNumberMetaDataExpandedLength",
+      jsonData: shortJSON
+    ),
+    to: repositoryRoot.appendingPathComponent("libPhoneNumberShortNumber/NBGeneratedShortNumberMetaData.m"),
+    dryRun: dryRun
+  )
+
+  try write(
+    gzipData(testingJSON),
+    to: repositoryRoot.appendingPathComponent("libPhoneNumberTestsCommon/libPhoneNumberMetaDataForTesting.zip"),
+    dryRun: dryRun
+  )
+
+  try write(
+    Data("""
+    /*****
+     * Data generated by scripts/metadataGenerator.swift
+     * From \(MetadataSource.phoneNumberForTesting.jsonFileName)
+     */
+
+    #include <zlib.h>
+
+    // z_const is not defined in some versions of zlib, so define it here
+    // in case it has not been defined.
+    #if defined(ZLIB_CONST) && !defined(z_const)
+    #  define z_const const
+    #else
+    #  define z_const
+    #endif
+
+    extern z_const size_t kPhoneNumberMetaDataForTestingExpandedLength;
+    """.utf8),
+    to: repositoryRoot.appendingPathComponent("libPhoneNumberTestsCommon/NBTestingMetaData.h"),
+    dryRun: dryRun
+  )
+
+  try write(
+    Data("""
+    #include "NBTestingMetaData.h"
+
+    z_const size_t kPhoneNumberMetaDataForTestingExpandedLength = \(testingJSON.count);
+    """.utf8),
+    to: repositoryRoot.appendingPathComponent("libPhoneNumberTestsCommon/NBTestingMetaData.m"),
+    dryRun: dryRun
+  )
+}
+
+func downloadMetadataJSONFiles(ref: String) throws -> [String: Data] {
+  var result: [String: Data] = [:]
+
+  for source in MetadataSource.allCases {
+    let url = rawMetadataURL(ref: ref, fileName: source.remoteFileName)
+    let script = try runSection("Downloading \(source.displayName)") {
+      try downloadString(from: url)
+    }
+
+    let jsonString = try runSection("Processing \(source.displayName)") {
+      try metadataJSONString(from: script, variable: source.jsVariable)
+    }
+
+    result[source.jsonFileName] = try jsonData(from: jsonString)
+  }
+
+  return result
+}
+
+func writeJSONFiles(_ jsonFiles: [String: Data], prettyPrint: Bool, dryRun: Bool) throws {
+  for source in MetadataSource.allCases {
+    let compactData = jsonFiles[source.jsonFileName]!
+    let outputData = prettyPrint ? try prettyPrintedJSONData(from: compactData) : compactData
+    let url = generatedJSONDirectory.appendingPathComponent(source.jsonFileName)
+    try write(outputData, to: url, dryRun: dryRun)
+  }
+}
+
+func main() throws {
+  let options = try parseArguments(CommandLine.arguments)
+
+  if options.packOnly {
+    let jsonFiles = try runSection("Reading existing generatedJSON files") {
+      try readExistingJSONFiles()
+    }
+    try runSection(options.dryRun ? "Validating generated Objective-C metadata outputs" : "Generating Objective-C metadata outputs") {
+      try generateObjectiveCMetadataFiles(from: jsonFiles, dryRun: options.dryRun)
+    }
+    print("\nMetadata packing completed successfully.\n")
+    return
+  }
+
+  let ref = normalizedGitRef(options.ref!)
+  print("Using google/libphonenumber ref: \(ref)")
+  let rawDownloadRef = try resolvedRawGitRef(ref)
+  if rawDownloadRef != ref {
+    print("Resolved google/libphonenumber ref \(ref) to commit \(rawDownloadRef) for raw metadata downloads.")
+  }
+
+  let jsonFiles = try downloadMetadataJSONFiles(ref: rawDownloadRef)
+
+  if !options.jsonOnly {
+    try runSection(options.dryRun ? "Validating generated Objective-C metadata outputs" : "Generating Objective-C metadata outputs") {
+      try generateObjectiveCMetadataFiles(from: jsonFiles, dryRun: options.dryRun)
+    }
+  }
+
+  try runSection(options.dryRun ? "Validating generatedJSON outputs" : "Writing generatedJSON outputs") {
+    try writeJSONFiles(jsonFiles, prettyPrint: options.prettyPrintJSON, dryRun: options.dryRun)
+  }
+
+  if options.prettyPrintJSON && !options.jsonOnly {
+    printWarning("generatedJSON was written pretty-printed after embedded metadata was generated from compact JSON.")
+  }
+
+  print("\nMetadata update completed successfully.\n")
+}
+
 do {
-  let metadata = try synchronouslyLoadStringResource(from: phoneMetadata)
-  context.evaluateScript(metadata)
-  let result = context.evaluateScript("JSON.stringify(i18n.phonenumbers.metadata)")!.toString()!
-  let url = baseURL.appendingPathComponent("PhoneNumberMetaData.json")
-  try result.write(
-    to: url,
-    atomically: true,
-    encoding: .utf8)
-  // Clean up
-  context.evaluateScript("i18n.phonenumbers.metadata = null")
-} catch (let error) {
-  fputs("Error loading phone number metadata \(error)\n", __stderrp)
+  try main()
+} catch {
+  printError("\(error)")
   exit(1)
 }
-
-// Phone metadata for testing.
-do {
-  let metadata = try synchronouslyLoadStringResource(from: phoneMetadataForTesting)
-  context.evaluateScript(metadata)
-  let result = context.evaluateScript("JSON.stringify(i18n.phonenumbers.metadata)")!.toString()!
-  let url = baseURL.appendingPathComponent("PhoneNumberMetaDataForTesting.json")
-  try result.write(
-    to: url,
-    atomically: true,
-    encoding: .utf8)
-} catch (let error) {
-  fputs("Error loading phone number metadata for testing \(error)\n", __stderrp)
-  exit(1)
-}
-
-// Short number metadata.
-do {
-  let metadata = try synchronouslyLoadStringResource(from: shortNumberMetadata)
-  context.evaluateScript(metadata)
-  let result = context.evaluateScript(
-    "JSON.stringify(i18n.phonenumbers.shortnumbermetadata)")!.toString()!
-  let url = baseURL.appendingPathComponent("ShortNumberMetadata.json")
-  try result.write(
-    to: url,
-    atomically: true,
-    encoding: .utf8)
-} catch (let error) {
-  fputs("Error loading short number metadata \(error)\n", __stderrp)
-  exit(1)
-}
-
-print("Done")

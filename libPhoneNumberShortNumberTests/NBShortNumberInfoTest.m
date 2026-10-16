@@ -14,11 +14,10 @@
 #import "NBPhoneNumberDesc.h"
 #import "NBShortNumberUtil.h"
 
-#import "NBGeneratedShortNumberMetadata.h"
 #import "NBShortNumberMetadataHelper.h"
 #import "NBShortNumberTestHelper.h"
-
-static size_t kPhoneNumberMetaDataForTestingExpandedLength = 33021;
+#import "NBTestingMetaData.h"
+#import "NSBundle+Extensions.h"
 
 @interface NBShortNumberInfoTest : XCTestCase
 
@@ -33,10 +32,8 @@ static size_t kPhoneNumberMetaDataForTestingExpandedLength = 33021;
 - (void)setUp {
   [super setUp];
   if (self != nil) {
-    NSBundle *bundle = [NSBundle bundleForClass:[self class]];
-
-    NSString *metadataPath = [bundle pathForResource:@"libPhoneNumberMetadataForTesting"
-                                              ofType:nil];
+    NSString* metadataPath = [NSBundle pathForFirstResourceNamed:@"libPhoneNumberMetaDataForTesting" ofType:@"zip"];
+    
     NSData *metadataData = [NSData dataWithContentsOfFile:metadataPath];
     NBMetadataHelper *helper =
         [[NBMetadataHelper alloc] initWithZippedData:metadataData
@@ -135,7 +132,17 @@ static size_t kPhoneNumberMetaDataForTestingExpandedLength = 33021;
                                                       forRegion:@"BB"]);
 }
 
-- (void)testExpectedCost {
+- (void)testIsSmsService {
+  NBPhoneNumber *smsServiceNumberForSomeRegion = [[NBPhoneNumber alloc] init];
+  smsServiceNumberForSomeRegion.countryCode = @1;
+  smsServiceNumberForSomeRegion.nationalNumber = @21234;
+  XCTAssertTrue([_shortNumberUtil isPhoneNumberSMSService:smsServiceNumberForSomeRegion
+                                                forRegion:@"US"]);
+  XCTAssertFalse([_shortNumberUtil isPhoneNumberSMSService:smsServiceNumberForSomeRegion
+                                                 forRegion:@"BB"]);
+}
+
+- (void)testGetExpectedCost {
   // Premium rate.
   NSString *premiumRateSample = [_testHelper exampleShortNumberForCost:NBEShortNumberCostPremiumRate
                                                             regionCode:@"FR"];
@@ -221,7 +228,7 @@ static size_t kPhoneNumberMetaDataForTestingExpandedLength = 33021;
                  [_shortNumberUtil expectedCostOfPhoneNumber:unknownNumber2]);
 }
 
-- (void)testExpectedCostForSharedCountryCallingCode {
+- (void)testGetExpectedCostForSharedCountryCallingCode {
   NSString *ambiguousPremiumRateString = @"1234";
   NBPhoneNumber *ambiguousPremiumRateNumber = [[NBPhoneNumber alloc] init];
   ambiguousPremiumRateNumber.countryCode = @61;
@@ -317,10 +324,15 @@ static size_t kPhoneNumberMetaDataForTestingExpandedLength = 33021;
                  [_shortNumberUtil expectedCostOfPhoneNumber:ambiguousTollFreeNumber]);
 }
 
-- (void)testGetExampleShortNumber {
+- (void)testExampleShortNumberPresence {
   XCTAssertEqualObjects(@"100", [_testHelper exampleShortNumberWithRegionCode:@"AM"]);
   XCTAssertEqualObjects(@"15", [_testHelper exampleShortNumberWithRegionCode:@"FR"]);
   XCTAssertEqualObjects(@"", [_testHelper exampleShortNumberWithRegionCode:@"UN001"]);
+
+  XCTAssertEqualObjects(@"100", [_shortNumberUtil getExampleShortNumber:@"AM"]);
+  XCTAssertEqualObjects(@"15", [_shortNumberUtil getExampleShortNumber:@"FR"]);
+  XCTAssertEqualObjects(@"", [_shortNumberUtil getExampleShortNumber:@"UN001"]);
+  XCTAssertEqualObjects(@"", [_shortNumberUtil getExampleShortNumber:nil]);
 }
 
 - (void)testGetExampleShortNumberForCost {
@@ -329,11 +341,27 @@ static size_t kPhoneNumberMetaDataForTestingExpandedLength = 33021;
   XCTAssertEqualObjects(@"611",
                         [_testHelper exampleShortNumberForCost:NBEShortNumberCostStandardRate
                                                     regionCode:@"FR"]);
-  XCTAssertEqualObjects(@"36665",
+  XCTAssertEqualObjects(@"1000",
                         [_testHelper exampleShortNumberForCost:NBEShortNumberCostPremiumRate
                                                     regionCode:@"FR"]);
   XCTAssertEqualObjects(@"", [_testHelper exampleShortNumberForCost:NBEShortNumberCostUnknown
                                                          regionCode:@"FR"]);
+
+  XCTAssertEqualObjects(@"15", [_shortNumberUtil getExampleShortNumberForRegion:@"FR"
+                                                                           cost:NBEShortNumberCostTollFree]);
+  XCTAssertEqualObjects(@"611", [_shortNumberUtil getExampleShortNumberForRegion:@"FR"
+                                                                            cost:NBEShortNumberCostStandardRate]);
+  XCTAssertEqualObjects(@"1000", [_shortNumberUtil getExampleShortNumberForRegion:@"FR"
+                                                                             cost:NBEShortNumberCostPremiumRate]);
+  XCTAssertEqualObjects(@"", [_shortNumberUtil getExampleShortNumberForRegion:@"FR"
+                                                                         cost:NBEShortNumberCostUnknown]);
+}
+
+- (void)testGetSupportedRegions {
+  NSArray<NSString *> *supportedRegions = [_shortNumberUtil getSupportedRegions];
+  XCTAssertTrue(supportedRegions.count > 0);
+  XCTAssertTrue([supportedRegions containsObject:@"US"]);
+  XCTAssertFalse([supportedRegions containsObject:@"001"]);
 }
 
 - (void)testConnectsToEmergencyNumber_US {
